@@ -1,0 +1,118 @@
+function clearExisting(){
+  var ss = SpreadsheetApp.getActive().getSheets()[0];
+  ss.clear();
+  
+}
+
+function import_calendar_events() {
+  var today = new Date();
+  var last_week = new Date();
+  
+  last_week.setDate(last_week.getDate() - 7);
+  today.setDate(today.getDate() + 1);
+  
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName('Raw');
+  
+  var events = CalendarApp.getDefaultCalendar().getEvents(last_week, today);
+  var pr_events = CalendarApp.getCalendarById('.@group.calendar.google.com').getEvents(last_week, today);
+  
+  var calendar_data = [];
+  var email = Session.getActiveUser().getEmail();
+  
+  calendar_data.push(["Timestamp","Email Address","Activity Type","Opportunity Type","Customer","Time Spent","Title"]);
+  
+  for ( var i = 0; i < events.length; i++ ) {
+    var meeting_ms = Math.abs(events[i].getEndTime() - events[i].getStartTime());
+    var meeting_sec = meeting_ms / 1000;
+    var meeting_min = meeting_sec / 60;
+    var meeting_hr = meeting_min / 60; 
+    
+    calendar_data.push([
+      events[i].getStartTime(),
+      email,
+      '',
+      '',
+      '',
+      meeting_hr,
+      events[i].getTitle()
+    ]);
+  }
+  
+  
+   for ( var i = 0; i < pr_events.length; i++ ) {
+    var meeting_ms = Math.abs(pr_events[i].getEndTime() - pr_events[i].getStartTime());
+    var meeting_sec = meeting_ms / 1000;
+    var meeting_min = meeting_sec / 60;
+    var meeting_hr = meeting_min / 60; 
+    
+    calendar_data.push([
+      pr_events[i].getStartTime(),
+      email,
+      '',
+      '',
+      '',
+      meeting_hr,
+      pr_events[i].getTitle()
+    ]);
+  }
+  
+  
+  var range = sheet.getRange(1, 1, calendar_data.length, 7).setValues(calendar_data);
+}
+
+function set_validation() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var activity_sheet = spreadsheet.getSheetByName('Activity Type');
+  var opp_sheet = spreadsheet.getSheetByName('Opportunity Type');
+  var raw_sheet = spreadsheet.getSheetByName('Raw');
+  var opp_names = spreadsheet.getSheetByName("Opportunity Names");
+  
+  var act_data = activity_sheet.getRange(1, 1, activity_sheet.getLastRow()).getValues();
+  var opp_data = opp_sheet.getRange(1, 1, opp_sheet.getLastRow()).getValues();
+  var oppnames_data = opp_names.getRange(1, 1, opp_names.getLastRow());
+  
+  var act_col = raw_sheet.getRange(2, 3, raw_sheet.getLastRow());
+  var opp_col = raw_sheet.getRange(2, 4, raw_sheet.getLastRow());
+  var oppnames_col = raw_sheet.getRange(2, 5, raw_sheet.getLastRow());
+  
+  var act_rule = SpreadsheetApp.newDataValidation().requireValueInList(act_data, true);
+  var opp_rule = SpreadsheetApp.newDataValidation().requireValueInList(opp_data, true);
+//  var oppnames_rule = SpreadsheetApp.newDataValidation().requireValueInList(oppnames_data, true);
+  var oppnames_rule = SpreadsheetApp.newDataValidation().requireValueInRange(oppnames_data);
+  
+  act_col.setDataValidation(act_rule);
+  opp_col.setDataValidation(opp_rule);
+  oppnames_col.setDataValidation(oppnames_rule);
+  
+  
+}
+
+function fire_data_gather() {
+  import_calendar_events();
+  set_validation();  
+}
+
+function sendToMaster(){
+//  var masterSheetId = "" //test sheet
+  var masterSheetId = "" //production sheet
+  
+  var masterSheet = SpreadsheetApp.openById(masterSheetId).getSheetByName("SE tracking form");
+  var masterLastRow = masterSheet.getLastRow();
+  
+  var mySheet = SpreadsheetApp.getActive().getSheets()[0];
+  var myData = mySheet.getDataRange().getValues();
+  myData.splice(0, 1);
+  
+  var masterRange = masterSheet.getRange((masterLastRow + 1), 1, myData.length, 7);
+  masterRange.setValues(myData);
+}
+
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('Calendar Functions')
+  .addItem('Clear Existing', 'clearExisting')
+  .addItem('Get Past Week Events', 'fire_data_gather')
+  .addItem('Send to Master', 'sendToMaster')
+  .addToUi();  
+}
